@@ -184,6 +184,15 @@ class DataProcessor(object):
         lines.append(line)
       return lines
 
+  @classmethod
+  def _read_csv(cls, input_file, delimiter = '\t', quotechar=None):
+    """Reads a tab separated value file."""
+    with tf.gfile.Open(input_file, "r") as f:
+      reader = pd.read_csv(f)
+      lines = []
+      for index, line in reader.iterrows():
+        lines.append(line.tolist())
+      return lines
 
 class XnliProcessor(DataProcessor):
   """Processor for the XNLI data set."""
@@ -280,17 +289,17 @@ class FakenewsProcessor(DataProcessor):
   def get_train_examples(self, data_dir):
     """See base class."""
     return self._create_examples(
-        self._read_tsv(os.path.join(data_dir, "train.csv"), ','), "train")
+        self._read_csv(os.path.join(data_dir, "train.csv")), "train")
 
   def get_dev_examples(self, data_dir):
     """See base class."""
     return self._create_examples(
-        self._read_tsv(os.path.join(data_dir, "dev.csv"), ','), "dev")
+        self._read_csv(os.path.join(data_dir, "dev.csv")), "dev")
 
   def get_test_examples(self, data_dir):
     """See base class."""
     return self._create_examples(
-        self._read_tsv(os.path.join(data_dir, "test.csv"), ','), "test")
+        self._read_csv(os.path.join(data_dir, "test.csv")), "test")
 
   def get_labels(self):
     """See base class."""
