@@ -302,6 +302,12 @@ class FakenewsProcessor(DataProcessor):
     for (i, line) in enumerate(lines):
       if i == 0:
         continue
+      
+      if len(line) != 8:
+        import ipdb; ipdb.set_trace()
+        print('Error in line: ' + ','.join(line))
+        raise ValueError('Invalid line!')
+
       guid = "%s-%s" % (set_type, tokenization.convert_to_unicode(line[0]))
       text_a = tokenization.convert_to_unicode(line[3])
       text_b = tokenization.convert_to_unicode(line[4])
