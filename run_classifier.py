@@ -303,7 +303,7 @@ class FakenewsProcessor(DataProcessor):
 
   def get_labels(self):
     """See base class."""
-    return ["unrelated", "related"]
+    return ["unrelated", "agreed", "disagreed"]
 
   def _create_examples(self, lines, set_type):
     """Creates examples for the training and dev sets."""
@@ -325,8 +325,8 @@ class FakenewsProcessor(DataProcessor):
       else:
         label = tokenization.convert_to_unicode(line[-1])
         # 先进行相关／不相关判别
-        if label == 'agreed' or label == 'disaggreed':
-            label = 'related'
+        #if label == 'agreed' or label == 'disaggreed':
+        #    label = 'related'
 
       examples.append(
           InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
