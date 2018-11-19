@@ -26,6 +26,9 @@ import optimization
 import tokenization
 import tensorflow as tf
 
+import pandas as pd
+import codecs
+
 flags = tf.flags
 
 FLAGS = flags.FLAGS
@@ -187,11 +190,13 @@ class DataProcessor(object):
   @classmethod
   def _read_csv(cls, input_file, delimiter = '\t', quotechar=None):
     """Reads a tab separated value file."""
-    with tf.gfile.Open(input_file, "r") as f:
+    with codecs.open(input_file, 'r', 'utf8') as f:
       reader = pd.read_csv(f)
       lines = []
       for index, line in reader.iterrows():
-        lines.append(line.tolist())
+        tmp = line.tolist()
+        tmp = list(map(str, tmp))
+        lines.append(tmp)
       return lines
 
 class XnliProcessor(DataProcessor):
@@ -315,9 +320,12 @@ class FakenewsProcessor(DataProcessor):
       if len(line) != 8:
         import ipdb; ipdb.set_trace()
         print('Error in line: ' + ','.join(line))
-        raise ValueError('Invalid line!')
+        continue
+        #raise ValueError('Invalid line!')
 
-      guid = "%s-%s" % (set_type, tokenization.convert_to_unicode(line[0]))
+      #print('\t'.join(line))
+
+      guid = "%s-%s" % (set_type, tokenization.convert_to_unicode(str(line[0])))
       text_a = tokenization.convert_to_unicode(line[3])
       text_b = tokenization.convert_to_unicode(line[4])
       if set_type == "test":
@@ -325,7 +333,7 @@ class FakenewsProcessor(DataProcessor):
       else:
         label = tokenization.convert_to_unicode(line[-1])
         # 先进行相关／不相关判别
-        if label == 'agreed' or label == 'disaggreed':
+        if label == 'agreed' or label == 'disagreed':
             label = 'related'
 
       examples.append(
