@@ -188,8 +188,8 @@ class DataProcessor(object):
       return lines
 
   @classmethod
-  def _read_csv(cls, input_file, delimiter = '\t', quotechar=None):
-    """Reads a tab separated value file."""
+  def _read_csv(cls, input_file, delimiter = ',', quotechar=None):
+    """Reads a comma separated value file."""
     with codecs.open(input_file, 'r', 'utf8') as f:
       reader = pd.read_csv(f)
       lines = []
@@ -332,6 +332,8 @@ class FakenewsProcessor(DataProcessor):
         label = "contradiction"
       else:
         label = tokenization.convert_to_unicode(line[-1])
+        if not label in self.get_labels():
+            import ipdb; ipdb.set_trace()
         # 先进行相关／不相关判别
         #if label == 'agreed' or label == 'disaggreed':
         #    label = 'related'
