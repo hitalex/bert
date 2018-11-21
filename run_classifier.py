@@ -314,10 +314,10 @@ class FakenewsProcessor(DataProcessor):
     """Creates examples for the training and dev sets."""
     examples = []
     for (i, line) in enumerate(lines):
-      if i == 0:
-        continue
+      #if i == 0:
+      #  continue
       
-      if len(line) != 8:
+      if (set_type == 'train' and len(line) != 8) or (set_type == 'test' and len(line) != 7):
         import ipdb; ipdb.set_trace()
         print('Error in line: ' + ','.join(line))
         continue
@@ -329,7 +329,7 @@ class FakenewsProcessor(DataProcessor):
       text_a = tokenization.convert_to_unicode(line[3])
       text_b = tokenization.convert_to_unicode(line[4])
       if set_type == "test":
-        label = "contradiction"
+        label = "unrelated"
       else:
         label = tokenization.convert_to_unicode(line[-1])
         if not label in self.get_labels():
@@ -633,6 +633,12 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
   output_bias = tf.get_variable(
       "output_bias", [num_labels], initializer=tf.zeros_initializer())
 
+  task_name = FLAGS.task_name.lower()
+  if task_name == 'fakenews':
+    class_weight = tf.constant([1.0/16, 1.0/15, 0.2])
+  else:
+    class_weight = tf.constant([1.0] * num_labels)
+
   with tf.variable_scope("loss"):
     if is_training:
       # I.e., 0.1 dropout
@@ -642,6 +648,9 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
     logits = tf.nn.bias_add(logits, output_bias)
     probabilities = tf.nn.softmax(logits, axis=-1)
     log_probs = tf.nn.log_softmax(logits, axis=-1)
+    #import ipdb; ipdb.set_trace()
+    
+    log_probs = tf.multiply(log_probs, class_weight)
 
     one_hot_labels = tf.one_hot(labels, depth=num_labels, dtype=tf.float32)
 
@@ -715,8 +724,19 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
         predictions = tf.argmax(logits, axis=-1, output_type=tf.int32)
         accuracy = tf.metrics.accuracy(label_ids, predictions)
         loss = tf.metrics.mean(per_example_loss)
+
+        # calculated the weighted accuracy here
+        task_name = FLAGS.task_name.lower()
+        if task_name == 'fakenews':
+          class_weight = tf.constant([1.0/16, 1.0/15, 0.2])
+        else:
+          class_weight = tf.constant([1.0] * num_labels)
+
+        weighted_accuracy = tf.metrics.accuracy(label_ids, predictions, class_weight)
+
         return {
             "eval_accuracy": accuracy,
+            "eval_weighted_accuracy": weighted_accuracy,
             "eval_loss": loss,
         }
 
