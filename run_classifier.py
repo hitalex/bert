@@ -22,6 +22,7 @@ import collections
 import csv
 import os
 import modeling
+import sklearn
 import optimization
 import tokenization
 import tensorflow as tf
@@ -178,7 +179,7 @@ class DataProcessor(object):
     raise NotImplementedError()
 
   @classmethod
-  def _read_tsv(cls, input_file, delimiter = '\t', quotechar=None):
+  def _read_tsv(cls, input_file, delimiter='\t', quotechar=None):
     """Reads a tab separated value file."""
     with tf.gfile.Open(input_file, "r") as f:
       reader = csv.reader(f, delimiter=delimiter, quotechar=quotechar)
@@ -187,9 +188,7 @@ class DataProcessor(object):
         lines.append(line)
       return lines
 
-  @classmethod
-  def _read_csv(cls, input_file, delimiter = ',', quotechar=None):
-    """Reads a comma separated value file."""
+  def _read_csv(cls, input_file):
     with codecs.open(input_file, 'r', 'utf8') as f:
       reader = pd.read_csv(f)
       lines = []
@@ -198,6 +197,7 @@ class DataProcessor(object):
         tmp = list(map(str, tmp))
         lines.append(tmp)
       return lines
+
 
 class XnliProcessor(DataProcessor):
   """Processor for the XNLI data set."""
@@ -287,6 +287,7 @@ class MnliProcessor(DataProcessor):
           InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
     return examples
 
+
 class FakenewsProcessor(DataProcessor):
   """Processor for the fakenews processor
   Step1: classifiy whether a news is related or not
@@ -298,8 +299,17 @@ class FakenewsProcessor(DataProcessor):
 
   def get_dev_examples(self, data_dir):
     """See base class."""
-    return self._create_examples(
-        self._read_csv(os.path.join(data_dir, "dev.csv")), "dev")
+    unrelated, agreed, disagreed = [], [], []
+    for i, l in enumerate(self._read_csv(os.path.join(data_dir, "dev.csv"))):
+        if tokenization.convert_to_unicode(l[-1]) == 'unrelated':
+            unrelated.append(l)
+        elif tokenization.convert_to_unicode(l[-1]) == 'agreed':
+            agreed.append(l)
+        elif tokenization.convert_to_unicode(l[-1]) == 'disagreed':
+            disagreed.append(l)
+    return self._create_examples(unrelated, "dev"), \
+           self._create_examples(agreed, "dev"), \
+           self._create_examples(disagreed, "dev")
 
   def get_test_examples(self, data_dir):
     """See base class."""
@@ -314,33 +324,17 @@ class FakenewsProcessor(DataProcessor):
     """Creates examples for the training and dev sets."""
     examples = []
     for (i, line) in enumerate(lines):
-      #if i == 0:
-      #  continue
-      
-      if (set_type == 'train' and len(line) != 8) or (set_type == 'test' and len(line) != 7):
-        import ipdb; ipdb.set_trace()
-        print('Error in line: ' + ','.join(line))
-        continue
-        #raise ValueError('Invalid line!')
-
-      #print('\t'.join(line))
-
       guid = "%s-%s" % (set_type, tokenization.convert_to_unicode(str(line[0])))
-      text_a = tokenization.convert_to_unicode(line[3])
-      text_b = tokenization.convert_to_unicode(line[4])
+      text_a = ' '.join([str(line[7]), str(line[9]), str(line[11])]) + tokenization.convert_to_unicode(line[3])
+      text_b = ' '.join([str(line[8]), str(line[10]), str(line[12])]) + tokenization.convert_to_unicode(line[4])
       if set_type == "test":
         label = "unrelated"
       else:
         label = tokenization.convert_to_unicode(line[-1])
-        if not label in self.get_labels():
-            import ipdb; ipdb.set_trace()
-        # 先进行相关／不相关判别
-        #if label == 'agreed' or label == 'disaggreed':
-        #    label = 'related'
       examples.append(
           InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
-
     return examples
+
 
 class MrpcProcessor(DataProcessor):
   """Processor for the MRPC data set (GLUE version)."""
@@ -545,7 +539,6 @@ def file_based_convert_examples_to_features(
 def file_based_input_fn_builder(input_file, seq_length, is_training,
                                 drop_remainder):
   """Creates an `input_fn` closure to be passed to TPUEstimator."""
-
   name_to_features = {
       "input_ids": tf.FixedLenFeature([seq_length], tf.int64),
       "input_mask": tf.FixedLenFeature([seq_length], tf.int64),
@@ -648,8 +641,7 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
     logits = tf.nn.bias_add(logits, output_bias)
     probabilities = tf.nn.softmax(logits, axis=-1)
     log_probs = tf.nn.log_softmax(logits, axis=-1)
-    #import ipdb; ipdb.set_trace()
-    
+
     log_probs = tf.multiply(log_probs, class_weight)
 
     one_hot_labels = tf.one_hot(labels, depth=num_labels, dtype=tf.float32)
@@ -723,21 +715,12 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
       def metric_fn(per_example_loss, label_ids, logits):
         predictions = tf.argmax(logits, axis=-1, output_type=tf.int32)
         accuracy = tf.metrics.accuracy(label_ids, predictions)
+        # f1_score = tf.contrib.metrics.f1_score(label_ids, predictions)
         loss = tf.metrics.mean(per_example_loss)
-
-        # calculated the weighted accuracy here
-        task_name = FLAGS.task_name.lower()
-        if task_name == 'fakenews':
-          class_weight = tf.constant([1.0/16, 1.0/15, 0.2])
-        else:
-          class_weight = tf.constant([1.0] * num_labels)
-
-        weighted_accuracy = tf.metrics.accuracy(label_ids, predictions, class_weight)
-
         return {
             "eval_accuracy": accuracy,
-            "eval_weighted_accuracy": weighted_accuracy,
             "eval_loss": loss,
+            # "f1_score": f1_score
         }
 
       eval_metrics = (metric_fn, [per_example_loss, label_ids, logits])
@@ -746,6 +729,7 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
           loss=total_loss,
           eval_metrics=eval_metrics,
           scaffold_fn=scaffold_fn)
+
     else:
       output_spec = tf.contrib.tpu.TPUEstimatorSpec(
           mode=mode, predictions=probabilities, scaffold_fn=scaffold_fn)
@@ -834,7 +818,7 @@ def main(_):
       "mnli": MnliProcessor,
       "mrpc": MrpcProcessor,
       "xnli": XnliProcessor,
-      "fakenews" : FakenewsProcessor,
+      "fakenews": FakenewsProcessor
   }
 
   if not FLAGS.do_train and not FLAGS.do_eval and not FLAGS.do_predict:
@@ -882,6 +866,7 @@ def main(_):
   train_examples = None
   num_train_steps = None
   num_warmup_steps = None
+
   if FLAGS.do_train:
     train_examples = processor.get_train_examples(FLAGS.data_dir)
     num_train_steps = int(
@@ -924,39 +909,89 @@ def main(_):
     estimator.train(input_fn=train_input_fn, max_steps=num_train_steps)
 
   if FLAGS.do_eval:
-    eval_examples = processor.get_dev_examples(FLAGS.data_dir)
-    eval_file = os.path.join(FLAGS.output_dir, "eval.tf_record")
-    file_based_convert_examples_to_features(
-        eval_examples, label_list, FLAGS.max_seq_length, tokenizer, eval_file)
+    unrelated, agreed, disagreed = processor.get_dev_examples(FLAGS.data_dir)
 
-    tf.logging.info("***** Running evaluation *****")
-    tf.logging.info("  Num examples = %d", len(eval_examples))
-    tf.logging.info("  Batch size = %d", FLAGS.eval_batch_size)
+    def eval(eval_examples, label):
+      eval_file = os.path.join(FLAGS.output_dir, label + ".eval.tf_record")
+      file_based_convert_examples_to_features(eval_examples, label_list, FLAGS.max_seq_length, tokenizer, eval_file)
 
-    # This tells the estimator to run through the entire set.
-    eval_steps = None
-    # However, if running eval on the TPU, you will need to specify the
-    # number of steps.
-    if FLAGS.use_tpu:
-      # Eval will be slightly WRONG on the TPU because it will truncate
-      # the last batch.
-      eval_steps = int(len(eval_examples) / FLAGS.eval_batch_size)
+      # tf.logging.info("***** Running evaluation *****")
+      # tf.logging.info("  Num examples = %d", len(eval_examples))
+      # tf.logging.info("  Batch size = %d", FLAGS.eval_batch_size)
 
-    eval_drop_remainder = True if FLAGS.use_tpu else False
-    eval_input_fn = file_based_input_fn_builder(
-        input_file=eval_file,
-        seq_length=FLAGS.max_seq_length,
-        is_training=False,
-        drop_remainder=eval_drop_remainder)
+      # This tells the estimator to run through the entire set.
+      eval_steps = None
+      # However, if running eval on the TPU, you will need to specify the
+      # number of steps.
+      if FLAGS.use_tpu:
+        # Eval will be slightly WRONG on the TPU because it will truncate
+        # the last batch.
+        eval_steps = int(len(eval_examples) / FLAGS.eval_batch_size)
 
-    result = estimator.evaluate(input_fn=eval_input_fn, steps=eval_steps)
+      eval_drop_remainder = True if FLAGS.use_tpu else False
+      eval_input_fn = file_based_input_fn_builder(
+            input_file=eval_file,
+            seq_length=FLAGS.max_seq_length,
+            is_training=False,
+            drop_remainder=eval_drop_remainder)
+
+      r = estimator.evaluate(input_fn=eval_input_fn, steps=eval_steps)
+      return r
+
+    unrelated_result = eval(unrelated, 'unrelated')
+    agreed_result = eval(agreed, 'agreed')
+    disagreed_result = eval(disagreed, 'disagreed')
+
+    unrelated_count = len(unrelated)
+    agreed_count = len(agreed)
+    disagreed_count = len(disagreed)
+
+    unrelated_acc = float(unrelated_result['eval_accuracy'])
+    agreed_acc = float(agreed_result['eval_accuracy'])
+    disagreed_acc = float(disagreed_result['eval_accuracy'])
+
+    # unrelated_f1 = float(unrelated_result['f1_score'])
+    # agreed_f1 = float(agreed_result['f1_score'])
+    # disagreed_f1 = float(disagreed_result['f1_score'])
+
+    unrelated_weight = 1 / 16
+    agreed_weight = 1 / 15
+    disagreed_weight = 1 / 5
+
+    weighted_accuracy = (unrelated_count * unrelated_weight * unrelated_acc +
+                         agreed_count * agreed_weight * agreed_acc +
+                         disagreed_count * disagreed_weight * disagreed_acc) / \
+                        (unrelated_count * unrelated_weight +
+                         agreed_count * agreed_weight +
+                         disagreed_count * disagreed_weight)
+
+    tf.summary.scalar("unrelated_eval_loss", unrelated_result['eval_loss'])
+    tf.summary.scalar("agreed_eval_loss", agreed_result['eval_loss'])
+    tf.summary.scalar("disagreed_loss", disagreed_result['eval_loss'])
+    tf.summary.scalar("unrelated_", unrelated_result['eval_loss'])
+
 
     output_eval_file = os.path.join(FLAGS.output_dir, "eval_results.txt")
     with tf.gfile.GFile(output_eval_file, "w") as writer:
       tf.logging.info("***** Eval results *****")
-      for key in sorted(result.keys()):
-        tf.logging.info("  %s = %s", key, str(result[key]))
-        writer.write("%s = %s\n" % (key, str(result[key])))
+      tf.logging.info(" unrelated acc = %f", unrelated_acc)
+      tf.logging.info(" agreed acc = %f", agreed_acc)
+      tf.logging.info(" disagreed acc = %f", disagreed_acc)
+      # tf.logging.info(" unrelated f1 = %f", unrelated_f1)
+      # tf.logging.info(" agreed f1 = %f", agreed_f1)
+      # tf.logging.info(" disagreed f1 = %f", disagreed_f1)
+      tf.logging.info(" weight accuracy = %f", weighted_accuracy)
+      # writer.write(" unrelated f1 = %f" % unrelated_f1)
+      # writer.write(" agreed f1 = %f" % agreed_f1)
+      # writer.write(" drsagreed f1 = %f" % disagreed_f1)
+      writer.write(" unrelated accuracy = %f" % unrelated_acc)
+      writer.write(" agreed accuracy = %f" % agreed_acc)
+      writer.write(" disagreed accuracy = %f" % disagreed_acc)
+      writer.write(" weight accuracy = %f" % weighted_accuracy)
+
+      # for key in sorted(result.keys()):
+      #   tf.logging.info("  %s = %s", key, str(result[key]))
+      #   writer.write("%s = %s\n" % (key, str(result[key])))
 
   if FLAGS.do_predict:
     predict_examples = processor.get_test_examples(FLAGS.data_dir)

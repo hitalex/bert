@@ -54,6 +54,53 @@ def fakenews_evaluation(true_csv_path, prediction_prob_path):
 
     return weighted_acc
 
+def add_additional_features(input_path, output_path):
+    """ add additional features for bert
+    List of features:
+    num_question_mark: number of question marks,?
+    num_exclamation_mark: number of exclamation mark, !
+    num_words: number of segmented words
+    """
+    import pandas as pd
+    import jieba
+    import numpy as np
+
+    df = pd.read_csv(input_path)
+    num_question_mark = np.zeros((2, len(df)), dtype = int)
+    num_exclamation_mark = np.zeros((2, len(df)), dtype = int)
+    num_words = np.zeros((2, len(df)), dtype = int)
+
+    for i in range(len(df)):
+        try:
+            title1 = str(df['title1_zh'].iloc[i])
+            title2 = str(df['title2_zh'].iloc[i])
+            num_question_mark[0, i] = title1.count('?') + title1.count('？')
+            num_question_mark[1, i] = title2.count('?') + title2.count('？')
+            num_exclamation_mark[0, i] =  title1.count('!') + title1.count('！')
+            num_exclamation_mark[1, i] =  title2.count('!') + title2.count('！')
+        except:
+            import ipdb; ipdb.set_trace()
+
+        c1 = len(list(jieba.cut(title1)))
+        c2 = len(list(jieba.cut(title2)))
+        num_words[0, i] = c1
+        num_words[1, i] = c2
+
+        if i % 10000 == 0:
+            print('Current count: %d, total: %d' % (i, len(df)))
+
+    df['num_question_mark1'] = num_question_mark[0]
+    df['num_question_mark2'] = num_question_mark[1]
+    df['num_exclamation_mark1'] = num_exclamation_mark[0]
+    df['num_exclamation_mark2'] = num_exclamation_mark[1]
+    df['num_words1'] = num_words[0]
+    df['num_words2'] = num_words[1]
+
+    print('Saving to: ', output_path)
+    df.to_csv(output_path, columns = ['id', 'tid1', 'tid2', 'title1_zh', 'title2_zh', 'title1_en', 'title2_en', 
+        'num_question_mark1', 'num_question_mark2', 'num_exclamation_mark1', 'num_exclamation_mark2', 
+        'num_words1', 'num_words2', 'label'], index = False)
+
 
 if __name__ == '__main__':
     path = sys.argv[1]
