@@ -32,6 +32,7 @@ def convert_to_unicode(text):
     elif isinstance(text, bytes):
       return text.decode("utf-8", "ignore")
     else:
+      print(text)
       raise ValueError("Unsupported string type: %s" % (type(text)))
   elif six.PY2:
     if isinstance(text, str):
