@@ -101,6 +101,27 @@ def add_additional_features(input_path, output_path):
         'num_question_mark1', 'num_question_mark2', 'num_exclamation_mark1', 'num_exclamation_mark2', 
         'num_words1', 'num_words2', 'label'], index = False)
 
+def generate_submit_file(test_id_list, test_result, submit_path):
+    """ generate submit files
+    Input:
+        test_id_list: id list
+        test_result: prediction results
+        submit_path: output file
+    Output:
+        void
+    """
+    import pandas as pd
+    import numpy as np
+    import ipdb; ipdb.set_trace()
+
+    class_labels = np.array(["unrelated", "agreed", "disagreed"])
+    result = pd.read_csv(test_result, header = None, delimiter = '\t').values
+    prediction = np.argmax(result, axis = 1)
+    prediction = class_labels[prediction]
+
+    submit_dict = {'Id':test_id_list, 'Category':prediction}
+    submit_df = pd.DataFrame(submit_dict)
+    submit_df.to_csv(submit_path, index = False)
 
 if __name__ == '__main__':
     path = sys.argv[1]
