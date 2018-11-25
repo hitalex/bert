@@ -112,7 +112,7 @@ def generate_submit_file(test_id_list, test_result, submit_path):
     """
     import pandas as pd
     import numpy as np
-    import ipdb; ipdb.set_trace()
+    #import ipdb; ipdb.set_trace()
 
     class_labels = np.array(["unrelated", "agreed", "disagreed"])
     result = pd.read_csv(test_result, header = None, delimiter = '\t').values

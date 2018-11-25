@@ -325,8 +325,8 @@ class FakenewsProcessor(DataProcessor):
     examples = []
     for (i, line) in enumerate(lines):
       guid = "%s-%s" % (set_type, tokenization.convert_to_unicode(str(line[0])))
-      text_a = ' '.join([line[7], line[9]]) + tokenization.convert_to_unicode(line[3])
-      text_b = ' '.join([line[8], line[10]]) + tokenization.convert_to_unicode(line[4])
+      text_a = tokenization.convert_to_unicode(line[3])
+      text_b = tokenization.convert_to_unicode(line[4])
       if set_type == "test":
         label = "unrelated"
       else:
