@@ -131,7 +131,7 @@ flags.DEFINE_integer(
 class InputExample(object):
   """A single training/test example for simple sequence classification."""
 
-  def __init__(self, guid, text_a, text_b=None, label=None):
+  def __init__(self, guid, text_a, text_b=None, label=None, other_data = None):
     """Constructs a InputExample.
 
     Args:
@@ -142,20 +142,24 @@ class InputExample(object):
         Only must be specified for sequence pair tasks.
       label: (Optional) string. The label of the example. This should be
         specified for train and dev examples, but not for test examples.
+
+      # added by Kong: other_data helps to provide more info about the example
+      other_data: 
     """
     self.guid = guid
     self.text_a = text_a
     self.text_b = text_b
     self.label = label
-
+    self.other_data = other_data
 
 class InputFeatures(object):
   """A single set of features of data."""
 
-  def __init__(self, input_ids, input_mask, segment_ids, label_id):
+  def __init__(self, input_ids, input_mask, segment_ids, similarity_features, label_id):
     self.input_ids = input_ids
     self.input_mask = input_mask
     self.segment_ids = segment_ids
+    self.similarity_features = similarity_features # similarity_features可能对应多个相似度度量
     self.label_id = label_id
 
 
@@ -331,8 +335,12 @@ class FakenewsProcessor(DataProcessor):
         label = "unrelated"
       else:
         label = tokenization.convert_to_unicode(line[-1])
+
+      # TODO: 读入相似度特征等其他特征，具体是哪一列需要看实际情况
+      similarity_features = [line[7], line[8], line[9]]
+
       examples.append(
-          InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+          InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, other_data = similarity_features))
     return examples
 
 
@@ -420,6 +428,10 @@ class ColaProcessor(DataProcessor):
 def convert_single_example(ex_index, example, label_list, max_seq_length,
                            tokenizer):
   """Converts a single `InputExample` into a single `InputFeatures`."""
+  
+  # other_data是一个list，存放的是所有其他的特征
+  similarity_features = example.other_data
+
   label_map = {}
   for (i, label) in enumerate(label_list):
     label_map[label] = i
@@ -490,6 +502,7 @@ def convert_single_example(ex_index, example, label_list, max_seq_length,
   assert len(input_mask) == max_seq_length
   assert len(segment_ids) == max_seq_length
 
+
   label_id = label_map[example.label]
   if ex_index < 5:
     tf.logging.info("*** Example ***")
@@ -499,18 +512,19 @@ def convert_single_example(ex_index, example, label_list, max_seq_length,
     tf.logging.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
     tf.logging.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
     tf.logging.info("segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
+    tf.logging.info("similarity_features: %s" % " ".join([str(x) for x in similarity_features]))
     tf.logging.info("label: %s (id = %d)" % (example.label, label_id))
 
   feature = InputFeatures(
       input_ids=input_ids,
       input_mask=input_mask,
       segment_ids=segment_ids,
+      similarity_features = similarity_features; # 以字符串的形式传入
       label_id=label_id)
   return feature
 
 
-def file_based_convert_examples_to_features(
-    examples, label_list, max_seq_length, tokenizer, output_file):
+def file_based_convert_examples_to_features(examples, label_list, max_seq_length, tokenizer, output_file):
   """Convert a set of `InputExample`s to a TFRecord file."""
 
   writer = tf.python_io.TFRecordWriter(output_file)
@@ -526,10 +540,15 @@ def file_based_convert_examples_to_features(
       f = tf.train.Feature(int64_list=tf.train.Int64List(value=list(values)))
       return f
 
+    def create_float_feature(values):
+      f = tf.train.Feature(float_list=tf.train.FloatList(value=list(values)))
+      return f
+
     features = collections.OrderedDict()
     features["input_ids"] = create_int_feature(feature.input_ids)
     features["input_mask"] = create_int_feature(feature.input_mask)
     features["segment_ids"] = create_int_feature(feature.segment_ids)
+    features['similarity_features'] = create_float_feature(feature.similarity_features) # 增加的特征放在这里
     features["label_ids"] = create_int_feature([feature.label_id])
 
     tf_example = tf.train.Example(features=tf.train.Features(feature=features))
@@ -599,7 +618,7 @@ def _truncate_seq_pair(tokens_a, tokens_b, max_length):
       tokens_b.pop()
 
 
-def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
+def create_model(bert_config, is_training, input_ids, input_mask, segment_ids, similarity_features,
                  labels, num_labels, use_one_hot_embeddings):
   """Creates a classification model."""
   model = modeling.BertModel(
@@ -608,6 +627,7 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
       input_ids=input_ids,
       input_mask=input_mask,
       token_type_ids=segment_ids,
+      similarity_features = similarity_features,
       use_one_hot_embeddings=use_one_hot_embeddings)
 
   # In the demo, we are doing a simple classification task on the entire
@@ -667,12 +687,13 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
     input_ids = features["input_ids"]
     input_mask = features["input_mask"]
     segment_ids = features["segment_ids"]
+    similarity_features = features["similarity_features"]
     label_ids = features["label_ids"]
 
     is_training = (mode == tf.estimator.ModeKeys.TRAIN)
 
     (total_loss, per_example_loss, logits, probabilities) = create_model(
-        bert_config, is_training, input_ids, input_mask, segment_ids, label_ids,
+        bert_config, is_training, input_ids, input_mask, segment_ids, similarity_features, label_ids,
         num_labels, use_one_hot_embeddings)
 
     tvars = tf.trainable_variables()
@@ -894,6 +915,7 @@ def main(_):
       predict_batch_size=FLAGS.predict_batch_size)
 
   if FLAGS.do_train:
+    # 所有的特征、标记都会写入到这个TFRecord中
     train_file = os.path.join(FLAGS.output_dir, "train.tf_record")
     file_based_convert_examples_to_features(
         train_examples, label_list, FLAGS.max_seq_length, tokenizer, train_file)
