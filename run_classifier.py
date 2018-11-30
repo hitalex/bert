@@ -337,10 +337,11 @@ class FakenewsProcessor(DataProcessor):
         label = tokenization.convert_to_unicode(line[-1])
 
       # TODO: 读入相似度特征等其他特征，具体是哪一列需要看实际情况
-      similarity_features = [line[7], line[8], line[9]]
+      # similarity_features = [line[7], line[8], line[9]]
+      similarity_features = [0.1, 0.2, 0.3]
 
       examples.append(
-          InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, other_data = similarity_features))
+          InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, other_data=similarity_features))
     return examples
 
 
@@ -519,7 +520,7 @@ def convert_single_example(ex_index, example, label_list, max_seq_length,
       input_ids=input_ids,
       input_mask=input_mask,
       segment_ids=segment_ids,
-      similarity_features = similarity_features; # 以字符串的形式传入
+      similarity_features=similarity_features, # 以字符串的形式传入
       label_id=label_id)
   return feature
 
@@ -563,6 +564,7 @@ def file_based_input_fn_builder(input_file, seq_length, is_training,
       "input_mask": tf.FixedLenFeature([seq_length], tf.int64),
       "segment_ids": tf.FixedLenFeature([seq_length], tf.int64),
       "label_ids": tf.FixedLenFeature([], tf.int64),
+      "similarity_features": tf.FixedLenFeature([3], tf.float32),
   }
 
   def _decode_record(record, name_to_features):
@@ -627,7 +629,7 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids, s
       input_ids=input_ids,
       input_mask=input_mask,
       token_type_ids=segment_ids,
-      similarity_features = similarity_features,
+      similarity_features=similarity_features,
       use_one_hot_embeddings=use_one_hot_embeddings)
 
   # In the demo, we are doing a simple classification task on the entire
@@ -991,7 +993,6 @@ def main(_):
     tf.summary.scalar("agreed_eval_loss", agreed_result['eval_loss'])
     tf.summary.scalar("disagreed_loss", disagreed_result['eval_loss'])
     tf.summary.scalar("unrelated_", unrelated_result['eval_loss'])
-
 
     output_eval_file = os.path.join(FLAGS.output_dir, "eval_results.txt")
     with tf.gfile.GFile(output_eval_file, "w") as writer:

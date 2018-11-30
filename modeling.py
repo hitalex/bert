@@ -133,7 +133,7 @@ class BertModel(object):
                input_ids,
                input_mask=None,
                token_type_ids=None,
-               similarity_features = None,
+               similarity_features=None,
                use_one_hot_embeddings=True,
                scope=None):
     """Constructor for BertModel.
@@ -227,6 +227,7 @@ class BertModel(object):
         # We "pool" the model by simply taking the hidden state corresponding
         # to the first token. We assume that this has been pre-trained
         first_token_tensor = tf.squeeze(self.sequence_output[:, 0:1, :], axis=1)
+        first_token_tensor = tf.concat([first_token_tensor, similarity_features], axis=1)
         self.pooled_output = tf.layers.dense(
             first_token_tensor,
             config.hidden_size,
