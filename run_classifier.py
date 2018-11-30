@@ -194,7 +194,7 @@ class DataProcessor(object):
 
   def _read_csv(cls, input_file):
     with codecs.open(input_file, 'r', 'utf8') as f:
-      reader = pd.read_csv(f)
+      reader = pd.read_csv(f, sep='\t')
       lines = []
       for index, line in reader.iterrows():
         tmp = line.tolist()
@@ -329,16 +329,22 @@ class FakenewsProcessor(DataProcessor):
     examples = []
     for (i, line) in enumerate(lines):
       guid = "%s-%s" % (set_type, tokenization.convert_to_unicode(str(line[0])))
-      text_a = tokenization.convert_to_unicode(line[3])
-      text_b = tokenization.convert_to_unicode(line[4])
+      text_a = tokenization.convert_to_unicode(line[2])
+      text_b = tokenization.convert_to_unicode(line[3])
       if set_type == "test":
         label = "unrelated"
       else:
-        label = tokenization.convert_to_unicode(line[-1])
+        label = tokenization.convert_to_unicode(line[4])
 
       # TODO: 读入相似度特征等其他特征，具体是哪一列需要看实际情况
-      # similarity_features = [line[7], line[8], line[9]]
-      similarity_features = [0.1, 0.2, 0.3]
+      similarity_features = [float(line[5]),
+                             float(line[6]),
+                             float(line[7]),
+                             float(line[8]),
+                             float(line[9]),
+                             float(line[10]),
+                             float(line[11])
+                             ]
 
       examples.append(
           InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, other_data=similarity_features))
@@ -564,7 +570,7 @@ def file_based_input_fn_builder(input_file, seq_length, is_training,
       "input_mask": tf.FixedLenFeature([seq_length], tf.int64),
       "segment_ids": tf.FixedLenFeature([seq_length], tf.int64),
       "label_ids": tf.FixedLenFeature([], tf.int64),
-      "similarity_features": tf.FixedLenFeature([3], tf.float32),
+      "similarity_features": tf.FixedLenFeature([7], tf.float32),
   }
 
   def _decode_record(record, name_to_features):
@@ -712,6 +718,8 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
 
         scaffold_fn = tpu_scaffold
       else:
+        assignment_map.pop('bert/pooler/dense/kernel')
+        assignment_map.pop('bert/pooler/dense/bias')
         tf.train.init_from_checkpoint(init_checkpoint, assignment_map)
 
     tf.logging.info("**** Trainable Variables ****")
