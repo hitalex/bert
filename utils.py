@@ -123,6 +123,38 @@ def generate_submit_file(test_id_list, test_result, submit_path):
     submit_df = pd.DataFrame(submit_dict)
     submit_df.to_csv(submit_path, index = False)
 
+def populate_train_dataset(train_path, output_path):
+    """ 将训练集中的unrelated以及agreed样本复制一份以扩充训练集
+    """
+    import pandas as pd
+    train = pd.read_csv(train_path)
+    df1 = train[train['label'] == 'unrelated']
+    df2 = train[train['label'] == 'agreed']
+    df = df1.append(df2) # merge two data frames
+    # 交换特定的列
+    tmp = df['tid1']; df['tid1'] = df['tid2']; df['tid2'] = tmp
+    # 情感值列交换
+    alist = ['pos_', 'neg_', 'neu_', 'compound_']
+    for a in alist:
+        if (a + '1') in train.columns:
+            print('Switching %s and %s' % (a + '1', a + '2'))
+            tmp = df[a + '1']
+            df[a + '1'] = df[a + '2']
+            df[a + '2'] = tmp
+
+    # 交换title以及topic相关特征
+    for c in list(train.columns):
+        if 'title1' in c:
+            t = c.replace('title1', 'title2')
+            print('Switching %s and %s' % (c, t))
+            tmp = df[c]
+            df[c] = df[t]
+            df[t] = tmp
+
+    new_train = train.append(df)
+    #import ipdb; ipdb.set_trace()
+    new_train.to_csv(output_path, index = False)
+
 if __name__ == '__main__':
     path = sys.argv[1]
     out_dir = sys.argv[2]
