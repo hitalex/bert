@@ -146,12 +146,15 @@ def populate_train_dataset(train_path, output_path):
     for c in list(train.columns):
         if 'title1' in c:
             t = c.replace('title1', 'title2')
-            print('Switching %s and %s' % (c, t))
+            #print('Switching %s and %s' % (c, t))
             tmp = df[c]
             df[c] = df[t]
             df[t] = tmp
 
     new_train = train.append(df)
+    print('New train rows: %d' % len(new_train))
+    print('Shuffling all rows...')
+    new_train = new_train.sample(frac = 1) # shuffle all rows
     #import ipdb; ipdb.set_trace()
     new_train.to_csv(output_path, index = False)
 
