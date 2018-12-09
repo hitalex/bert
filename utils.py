@@ -163,26 +163,31 @@ def populate_train_dataset(train_path, output_path):
     #import ipdb; ipdb.set_trace()
     new_train.to_csv(output_path, index = False)
 
-def merge_predict_prob(test_id_list, pred_prob_list):
+def merge_predict_prob(test_id_list, pred_prob_list, weight_list = None):
     ''' 根据test id列表和概率预测结果，得到最终的预测结果
         其中每个结果的权重都一样
     Input:
         test_id_list: test sample的id列表
         pred_prob_list: [result1, result2, ...]
         其中，每个result的格式为：key是test id，value为unrelated, agreed, disagreed的概率
+        weight_list 表示前面几个result的权重
     Output:
         pred 最终的预测结果
     '''
     test_id_list = list(map(str, test_id_list))
     num_results = len(pred_prob_list)
+    if weight_list is None:
+        weight_list = [1.0] * num_results
+    else:
+        assert(num_results == len(weight_list))
     total_result = dict()
     y_pred = []
     import ipdb; ipdb.set_trace()
     for test_id in test_id_list:
-        for result in pred_prob_list:
+        for i, result in enumerate(pred_prob_list):
             total_result[test_id] = np.array([0] * len(LABEL_LIST), float)
             if test_id in result:
-                total_result[test_id] += result[test_id]
+                total_result[test_id] += (weight_list[i] * result[test_id])
         
         if sum(total_result[test_id]) > 0:
             total_result[test_id] = total_result[test_id] / sum(total_result[test_id])
