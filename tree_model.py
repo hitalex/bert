@@ -26,7 +26,7 @@ def label_encode(x):
 #X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
 label_index_map = {'unrelated': 0, 'agreed':1, 'disagreed': 2}
-class_weight=[1/16, 1/15, 1/5]
+class_weight={0: 1/16, 1: 1/15, 2: 1/5, 'unrealted': 1/16, 'agreed': 1/15, 'disagreed':1/5}
 
 def train_test_xgboost(X_train, X_test, y_train, y_test):
 
