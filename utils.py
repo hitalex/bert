@@ -201,6 +201,22 @@ def write_submit_file(test_id_list, pred, output_path):
     data_df = pd.DataFrame(data)
     data_df.to_csv(output_path, index = False)
 
+def read_bert_pred_result(test_id_list, path):
+    ''' 读取bert的预测结果
+    Input:
+        test_id_list
+        path: bert模型的预测结果
+    Output:
+        result: key是test id，value是概率值列表
+    '''
+    df = pd.read_csv(path, header = None, delimiter='\t')
+    assert(len(df) == len(test_id_list))
+    result = dict()
+    for i, test_id in enumerate(test_id_list):
+        result[str(test_id)] = np.array(df.iloc[i].values)
+
+    return result
+
 if __name__ == '__main__':
     path = sys.argv[1]
     out_dir = sys.argv[2]
