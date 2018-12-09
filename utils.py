@@ -177,13 +177,14 @@ def merge_predict_prob(test_id_list, pred_prob_list):
     num_results = len(pred_prob_list)
     total_result = dict()
     y_pred = []
+    import ipdb; ipdb.set_trace()
     for test_id in test_id_list:
         for result in pred_prob_list:
             total_result[test_id] = np.array([0] * len(LABEL_LIST), float)
             if test_id in result:
                 total_result[test_id] += result[test_id]
         
-        if sum(total_result[teset_id]) > 0:
+        if sum(total_result[test_id]) > 0:
             total_result[test_id] = total_result[test_id] / sum(total_result[test_id])
             y_pred.append(LABEL_LIST[np.argmax(total_result[test_id])])
         else:
