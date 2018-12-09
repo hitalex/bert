@@ -55,9 +55,10 @@ def train_test_xgboost(X_train, X_test, y_train, y_test):
 
     pred = np.argmax(pred_prob, axis = 1)
 
-    acc = weightAccuracy(y_test, pred)
+    if y_test != None:
+        acc = weightAccuracy(y_test, pred)
 
-    return pred
+    return pred_prob
 
 def weightAccuracy(y,y_hat):
     y_true_sum=0
@@ -95,14 +96,16 @@ def prepare_features(csv_path):
             column_list.append('title' + str(i+1) + '_topic_' + str(j+1))
 
     data = pd.read_csv(csv_path)
-
     feature_df = data[column_list]
-
     features = feature_df.values
-    labels = data['label'].values
 
-    for i in range(len(labels)):
-        labels[i] = label_index_map[labels[i]]
+    if 'label' in list(data.columns)
+        labels = data['label'].values
+
+        for i in range(len(labels)):
+            labels[i] = label_index_map[labels[i]]
+    else:
+        labels = None
 
     return features, labels
 
