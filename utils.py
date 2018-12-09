@@ -182,10 +182,9 @@ def merge_predict_prob(test_id_list, pred_prob_list, weight_list = None):
         assert(num_results == len(weight_list))
     total_result = dict()
     y_pred = []
-    import ipdb; ipdb.set_trace()
     for test_id in test_id_list:
+        total_result[test_id] = np.array([0] * len(LABEL_LIST), float)
         for i, result in enumerate(pred_prob_list):
-            total_result[test_id] = np.array([0] * len(LABEL_LIST), float)
             if test_id in result:
                 total_result[test_id] += (weight_list[i] * result[test_id])
         
